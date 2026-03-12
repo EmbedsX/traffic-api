@@ -5,11 +5,11 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
-const serviceAccount = require("./serviceAccountKey.json");
+const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
-});
+});;
 
 const db = admin.firestore();
 
@@ -58,6 +58,12 @@ app.get("/verify", async (req,res)=>{
 
 });
 
-app.listen(3000, ()=>{
-  console.log("Server running on port 3000");
+const PORT = process.env.PORT || 8080;
+
+app.listen(PORT, ()=>{
+  console.log("Server running on port " + PORT);
 });
+
+
+
+
