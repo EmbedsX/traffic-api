@@ -1,70 +1,105 @@
 const express = require("express");
-const admin = require("firebase-admin");
 const cors = require("cors");
+const admin = require("firebase-admin");
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+// Firebase Key
+const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
-});;
+});
 
 const db = admin.firestore();
 
+let lastResult = {
+status:"WAITING"
+};
+
+// ------------------------
+// Home route
+// ------------------------
+
+app.get("/", (req,res)=>{
+res.send("Traffic QR Verification Server Running");
+});
+
+// ------------------------
+// VERIFY API (ESP32 use)
+// ------------------------
+
 app.get("/verify", async (req,res)=>{
 
-  const id = req.query.id;
+try{
 
-  if(!id){
-    return res.status(400).json({error:"ID missing"});
-  }
+const id = req.query.id;
 
-  try{
+console.log("QR ID:",id);
 
-    const doc = await db.collection("vehicles").doc(id).get();
+const doc = await db.collection("vehicles").doc(id).get();
 
-    if(!doc.exists){
-      return res.json({status:"NOT_FOUND"});
-    }
+if(!doc.exists){
 
-    const data = doc.data();
+lastResult = {
+status:"INVALID"
+};
 
-    const today = new Date().toISOString().split("T")[0];
+return res.json({status:"INVALID"});
+}
 
-    const pucValid = data.puc_expiry >= today;
-    const licenseValid = data.license_expiry >= today;
+const data = doc.data();
 
-    let finalStatus = "VALID";
+const today = new Date();
 
-    if(!pucValid || !licenseValid){
-      finalStatus = "INVALID";
-    }
+const pucExpiry = new Date(data.puc_expiry);
+const licenseExpiry = new Date(data.license_expiry);
 
-    res.json({
-      owner:data.name,
-      vehicle:data.vehicle,
-      license:data.license,
-      puc_expiry:data.puc_expiry,
-      license_expiry:data.license_expiry,
-      status:finalStatus
-    });
+if(pucExpiry < today || licenseExpiry < today){
 
-  }
-  catch(err){
-    res.status(500).json({error:err.message});
-  }
+lastResult = {
+status:"INVALID",
+...data
+};
+
+return res.json({status:"INVALID"});
+}
+
+lastResult = {
+status:"VALID",
+...data
+};
+
+res.json({status:"VALID"});
+
+}
+
+catch(err){
+
+console.log(err);
+
+res.status(500).send("Server Error");
+
+}
 
 });
 
-const PORT = process.env.PORT || 10000;
+// ------------------------
+// RESULT API (HTML use)
+// ------------------------
 
-app.listen(PORT, ()=>{
-  console.log("Server running on port " + PORT);
+app.get("/result",(req,res)=>{
+
+res.json(lastResult);
+
 });
 
+// ------------------------
 
+const PORT = process.env.PORT || 8080;
 
-
-
+app.listen(PORT,()=>{
+console.log("Server running on port",PORT);
+});
