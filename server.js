@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 // Firebase Key
-const serviceAccount = require("./serviceAccountKey.json");
+const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -103,4 +103,5 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT,()=>{
 console.log("Server running on port",PORT);
 });
+
 
