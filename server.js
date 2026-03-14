@@ -56,8 +56,11 @@ const today = new Date();
 
 const pucExpiry = new Date(data.puc_expiry);
 const licenseExpiry = new Date(data.license_expiry);
+const insuranceExpiry = new Date(data.insurance_expiry);   // ✅ added
 
-if(pucExpiry < today || licenseExpiry < today){
+// Check expiry
+
+if(pucExpiry < today || licenseExpiry < today || insuranceExpiry < today){   // ✅ added insurance
 
 lastResult = {
 status:"INVALID",
@@ -103,5 +106,3 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT,()=>{
 console.log("Server running on port",PORT);
 });
-
-
