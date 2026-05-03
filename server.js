@@ -3,10 +3,16 @@ const cors = require("cors");
 const admin = require("firebase-admin");
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.raw({ type: 'image/jpeg', limit: '5mb' })); // for ESP32 image
 
-// Firebase Key
+// ------------------------
+// FIREBASE SETUP
+// ------------------------
+
 const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 admin.initializeApp({
@@ -15,94 +21,119 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
+// ------------------------
+// GLOBAL RESULT (HTML PAGE)
+// ------------------------
+
 let lastResult = {
-status:"WAITING"
+  status: "WAITING"
 };
 
 // ------------------------
-// Home route
+// HOME
 // ------------------------
 
-app.get("/", (req,res)=>{
-res.send("Traffic QR Verification Server Running");
+app.get("/", (req, res) => {
+  res.send("🚀 Traffic QR Verification Server Running");
 });
 
 // ------------------------
-// VERIFY API (ESP32 use)
+// UPLOAD API (ESP32 IMAGE)
 // ------------------------
 
-app.get("/verify", async (req,res)=>{
+app.post("/upload", (req, res) => {
 
-try{
+  console.log("📸 Upload API hit");
 
-const id = req.query.id;
+  // ⚠️ IMPORTANT:
+  // इथे normally QR decode करायचा असतो (OpenCV / library)
+  // पण तुझ्याकडे already ESP32 वर QR ID मिळते
 
-console.log("QR ID:",id);
+  // 👉 TEST साठी fixed ID देतो
+  const qrID = "mWWV1SbDSFzCiHHryXtr";
 
-const doc = await db.collection("vehicles").doc(id).get();
+  console.log("Returning ID:", qrID);
 
-if(!doc.exists){
+  res.send(qrID);
+});
 
-lastResult = {
-status:"INVALID"
-};
+// ------------------------
+// VERIFY API (MAIN LOGIC)
+// ------------------------
 
-return res.json({status:"INVALID"});
-}
+app.get("/verify", async (req, res) => {
 
-const data = doc.data();
+  try {
 
-const today = new Date();
+    const id = req.query.id;
 
-const pucExpiry = new Date(data.puc_expiry);
-const licenseExpiry = new Date(data.license_expiry);
-const insuranceExpiry = new Date(data.insurance_expiry);   // ✅ added
+    console.log("🔍 QR ID:", id);
 
-// Check expiry
+    const doc = await db.collection("vehicles").doc(id).get();
 
-if(pucExpiry < today || licenseExpiry < today || insuranceExpiry < today){   // ✅ added insurance
+    if (!doc.exists) {
 
-lastResult = {
-status:"INVALID",
-...data
-};
+      lastResult = {
+        status: "INVALID"
+      };
 
-return res.json({status:"INVALID"});
-}
+      return res.json({ status: "INVALID" });
+    }
 
-lastResult = {
-status:"VALID",
-...data
-};
+    const data = doc.data();
 
-res.json({status:"VALID"});
+    const today = new Date();
 
-}
+    const pucExpiry = new Date(data.puc_expiry);
+    const licenseExpiry = new Date(data.license_expiry);
+    const insuranceExpiry = new Date(data.insurance_expiry);
 
-catch(err){
+    // Expiry check
 
-console.log(err);
+    if (
+      pucExpiry < today ||
+      licenseExpiry < today ||
+      insuranceExpiry < today
+    ) {
 
-res.status(500).send("Server Error");
+      lastResult = {
+        status: "INVALID",
+        ...data
+      };
 
-}
+      return res.json({ status: "INVALID" });
+    }
+
+    lastResult = {
+      status: "VALID",
+      ...data
+    };
+
+    res.json({ status: "VALID" });
+
+  } catch (err) {
+
+    console.log("❌ ERROR:", err);
+    res.status(500).send("Server Error");
+
+  }
 
 });
 
 // ------------------------
-// RESULT API (HTML use)
+// RESULT API (HTML PAGE)
 // ------------------------
 
-app.get("/result",(req,res)=>{
-
-res.json(lastResult);
-
+app.get("/result", (req, res) => {
+  res.json(lastResult);
 });
 
+// ------------------------
+// SERVER START
 // ------------------------
 
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT,()=>{
-console.log("Server running on port",PORT);
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
 });
